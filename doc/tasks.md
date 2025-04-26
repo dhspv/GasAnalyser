@@ -2,7 +2,7 @@
 # Task List
 
 ## To Do
-- [ ] Task 1: Description of the task
+- [ ] Task 1: Description of the tasks
 - [ ] Task 2: Description of the task
 - [ ] Task 3: Description of the task
 
