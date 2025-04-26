@@ -1,0 +1,16 @@
+    touch_calib.txt
+ax for touch calib (touch_calib = touch * a + b)
+bx for touch calib (touch_calib = touch * a + b)
+ay for touch calib (touch_calib = touch * a + b)
+by for touch calib (touch_calib = touch * a + b)
+
+    sensor_calib.txt
+calibO2InAir
+calibHeInAir
+calibO2InO2
+calibHeInO2
+calibO2InHe
+calibHeInHe
+
+    altitude.txt
+altitude
