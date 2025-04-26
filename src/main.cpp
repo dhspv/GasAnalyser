@@ -399,7 +399,6 @@ void calibrateTouch() {
 
   getTouchData();
   delay(2000);
-  mainScreen();
 }
 
 void menuScreen2() {
@@ -414,8 +413,8 @@ void menuScreen2() {
   tft.drawRect(BUTTON_CHECKLIN_CX - BUTTON_W/2, BUTTON_CHECKLIN_CY - BUTTON_H/2 - 5, BUTTON_W, BUTTON_H, TFT_WHITE);
   tft.drawString("Debug", BUTTON_DBG_CX, BUTTON_DBG_CY);
   tft.drawRect(BUTTON_DBG_CX - BUTTON_W/2, BUTTON_DBG_CY - BUTTON_H/2 - 5, BUTTON_W, BUTTON_H, TFT_WHITE);
-  // tft.drawString("Next", BUTTON_NEXT_CX, BUTTON_NEXT_CY);
-  // tft.drawRect(BUTTON_NEXT_CX - BUTTON_W/2, BUTTON_NEXT_CY - BUTTON_H/2 - 5, BUTTON_W, BUTTON_H, TFT_WHITE);
+  tft.drawString("Cal Touch", BUTTON_TCAL_CX, BUTTON_TCAL_CY);
+  tft.drawRect(BUTTON_TCAL_CX - BUTTON_W/2, BUTTON_TCAL_CY - BUTTON_H/2 - 5, BUTTON_W, BUTTON_H, TFT_WHITE);
   tft.drawString("Exit", BUTTON_EXIT_CX, BUTTON_EXIT_CY);
   tft.drawRect(BUTTON_EXIT_CX - BUTTON_W/2, BUTTON_EXIT_CY - BUTTON_H/2 - 5, BUTTON_W, BUTTON_H, TFT_WHITE);
   delay(TOUCH_DELAY);
@@ -427,6 +426,10 @@ void menuScreen2() {
              tx > BUTTON_SETALT_CX - BUTTON_W/2 && 
              ty < BUTTON_SETALT_CY + BUTTON_H/2 && 
              ty > BUTTON_SETALT_CY - BUTTON_H/2) setAltData();
+    if      (tx < BUTTON_TCAL_CX + BUTTON_W/2 && 
+             tx > BUTTON_TCAL_CX - BUTTON_W/2 && 
+             ty < BUTTON_TCAL_CY + BUTTON_H/2 && 
+             ty > BUTTON_TCAL_CY - BUTTON_H/2) calibrateTouch();
     else if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
              tx > BUTTON_EXIT_CX - BUTTON_W/2 && 
              ty < BUTTON_EXIT_CY + BUTTON_H/2 && 
@@ -585,12 +588,12 @@ void loop() {
   }
   updateTouchCoordinates();
   Serial.printf("Touched! %f, %f\n", tx, ty);
-  if (tx < BUTTON_MENU_CX + BUTTON_W/2 && 
-      tx > BUTTON_MENU_CX - BUTTON_W/2 && 
-      ty < BUTTON_MENU_CY + BUTTON_H/2 && 
-      ty > BUTTON_MENU_CY - BUTTON_H/2) menuScreen1();
-  if (tx < BUTTON_LOCK_CX + BUTTON_W/2 && 
-      tx > BUTTON_LOCK_CX - BUTTON_W/2 && 
-      ty < BUTTON_LOCK_CY + BUTTON_H/2 && 
-      ty > BUTTON_LOCK_CY - BUTTON_H/2) screenLock();
+  if      (tx < BUTTON_MENU_CX + BUTTON_W/2 && 
+           tx > BUTTON_MENU_CX - BUTTON_W/2 && 
+           ty < BUTTON_MENU_CY + BUTTON_H/2 && 
+           ty > BUTTON_MENU_CY - BUTTON_H/2) menuScreen1();
+  else if (tx < BUTTON_LOCK_CX + BUTTON_W/2 && 
+           tx > BUTTON_LOCK_CX - BUTTON_W/2 && 
+           ty < BUTTON_LOCK_CY + BUTTON_H/2 && 
+           ty > BUTTON_LOCK_CY - BUTTON_H/2) screenLock();
 }
