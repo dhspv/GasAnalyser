@@ -5,8 +5,10 @@
 - [ ] Separate constants and helper functions from main file
 
 ## In Progress
-- [ ] Make calibration screens and save variables accordingly
+- [ ] After gas calibration, display confirmation of new stored data
+- [ ] Allow exiting altitude menu without setting new value
 
 ## Completed
 - [x] Main menu layout
 - [x] Writing/Reading to Flash
+- [x] Make calibration screens and save variables accordingly
