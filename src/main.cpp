@@ -97,9 +97,10 @@ void updateSpriteO2(bool clearSpr, uint8_t position) {
   tSpr.setFont(&fonts::FreeSans24pt7b);
   tSpr.setTextDatum(TL_DATUM);
   tSpr.setTextColor(TFT_GREEN);
-  if (position == 0) tSpr.setCursor(5, 20);
-  else tSpr.setCursor(5, 80);
-  if (o2Val > 10.0) tSpr.printf("%.1f %%", o2Val);
+  if (position == 0) tSpr.setCursor(0, 20);
+  else tSpr.setCursor(0, 80);
+  if (o2Val == 100.0) tSpr.printf("%.0f %%", o2Val);
+  else if (o2Val > 10.0) tSpr.printf("%.1f %%", o2Val);
   else tSpr.printf("0%.1f %%", o2Val);
 }
 
@@ -108,9 +109,10 @@ void updateSpriteHe(bool clearSpr, uint8_t position) {
   tSpr.setFont(&fonts::FreeSans24pt7b);
   tSpr.setTextDatum(TL_DATUM);
   tSpr.setTextColor(TFT_GREEN);
-  if (position == 0) tSpr.setCursor(5, 20);
-  else tSpr.setCursor(5, 80);
-  if (heVal > 10.0) tSpr.printf("%.1f %%", heVal);
+  if (position == 0) tSpr.setCursor(0, 20);
+  else tSpr.setCursor(0, 80);
+  if (heVal == 100.0) tSpr.printf("%.0f %%", heVal);
+  else if (heVal > 10.0) tSpr.printf("%.1f %%", heVal);
   else tSpr.printf("0%.1f %%", heVal);
 }
 
@@ -160,11 +162,11 @@ float calcHe(int32_t x){
 
 void read_sensors() {
   int32_t x;
-  // Measure O2 TBD
-  x = 20;
+  // Measure O2
+  x = ads.readADC_Differential_0_1();
   o2SensorReading[avgCounter] = x;
-  // Measure He TBD
-  x = 30;
+  // Measure He
+  x = ads.readADC_Differential_2_3();
   heSensorReading[avgCounter] = x;
 
   avgCounter++;
@@ -362,7 +364,6 @@ void storeTouch(float axNew, float ayNew, float bxNew, float byNew) {
 }
 
 void setO2Vars() {
-  getSensorData();
   float beta = calibO2InO2 * calibO2InO2 - calibO2InAir * calibO2InAir;
   float gamma = calibO2InO2 * calibO2InO2 - calibO2InHe * calibO2InAir;
   float epsilon = 1 / float(calibO2InO2 + calibO2InAir) - 1 / float(calibO2InO2 + calibO2InHe);
@@ -372,7 +373,6 @@ void setO2Vars() {
 }
 
 void setHeVars() {
-  getSensorData();
   float alpha = 98.0/77.1 * calibHeInAir + (1 - 98.0/77.1) * calibHeInO2 - calibHeInHe;
   bHe = -1 * 98.0 / alpha;
   cHe = 98.0 - calibHeInHe * bHe;
@@ -418,6 +418,8 @@ void calibrateAir(){
       calibO2InAir = o2SensorReadingAvg; 
       calibHeInAir = heSensorReadingAvg;
       writeSensorData();
+      setO2Vars();
+      setHeVars();
       return;
     }
     else if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
@@ -466,6 +468,8 @@ void calibrateO2(){
       calibO2InO2 = o2SensorReadingAvg; 
       calibHeInO2 = heSensorReadingAvg;
       writeSensorData();
+      setO2Vars();
+      setHeVars();
       return;
     }
     else if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
@@ -514,6 +518,8 @@ void calibrateHe(){
       calibO2InHe = o2SensorReadingAvg; 
       calibHeInHe = heSensorReadingAvg;
       writeSensorData();
+      setO2Vars();
+      setHeVars();
       return;
     }
     else if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
@@ -577,6 +583,41 @@ void calibrateTouch() {
   delay(2000);
 }
 
+void debugScreen() {
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextDatum(ML_DATUM);
+  tft.setFont(&fonts::FreeSans12pt7b);
+  tft.setTextColor(TFT_WHITE);
+
+  delay(TOUCH_DELAY);
+
+  while(!tft.getTouch(&tp)) {
+    tft.fillScreen(TFT_BLACK);
+    float battVal = analogRead(BATTPIN);
+    float battScale = 0.111982;
+    float battOffset = -2857;
+    float battPercent = (battVal + battOffset) * battScale;
+    tft.setCursor(0, 10);
+    tft.printf("battPercent = %.3f", battPercent);
+
+    int32_t adcRead = ads.readADC_Differential_0_1();
+    tft.setCursor(0, 30);
+    tft.printf("o2Adc = %d", adcRead);
+    float tmp = calcO2(adcRead);
+    tft.setCursor(0, 50);
+    tft.printf("o2Val = %.3f", tmp);
+    adcRead = ads.readADC_Differential_2_3();
+    tft.setCursor(0, 70);
+    tft.printf("heAdc = %d", adcRead);
+    tmp = calcHe(adcRead);
+    tft.setCursor(0, 90);
+    tft.printf("heVal = %.3f", tmp);
+
+    delay(1000);
+  }
+  return;
+}
+
 void menuScreen2() {
   tft.fillScreen(TFT_BLACK);
   tft.setTextDatum(CC_DATUM);
@@ -608,6 +649,10 @@ void menuScreen2() {
              tx > BUTTON_TCAL_CX - BUTTON_W/2 && 
              ty < BUTTON_TCAL_CY + BUTTON_H/2 && 
              ty > BUTTON_TCAL_CY - BUTTON_H/2) {calibrateTouch(); return;}
+    if      (tx < BUTTON_DBG_CX + BUTTON_W/2 && 
+             tx > BUTTON_DBG_CX - BUTTON_W/2 && 
+             ty < BUTTON_DBG_CY + BUTTON_H/2 && 
+             ty > BUTTON_DBG_CY - BUTTON_H/2) {debugScreen(); return;}
     else if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
              tx > BUTTON_EXIT_CX - BUTTON_W/2 && 
              ty < BUTTON_EXIT_CY + BUTTON_H/2 && 
@@ -721,7 +766,7 @@ void setup() {
   h = tft.height();
   w = tft.width();
   initSprites();
-  tft.setBrightness(30); // out of 255
+  tft.setBrightness(255); // out of 255
   startupScreen();
   Serial.println("2");
 
@@ -732,12 +777,18 @@ void setup() {
   Serial.println("3");
   
   // Calculate fitting variables
+  getSensorData();
   setO2Vars();
   setHeVars();
   Serial.println("4");
   
-  // ads.setGain(GAIN_FOUR); // 4x gain 1 bit = 0.03125mV
-  // ads.begin(); // ads1115 start
+  Wire.setPins(SDAPIN, SCLPIN);
+  Wire.begin();
+  ads.setGain(GAIN_FOUR); // 4x gain 1 bit = 0.03125mV
+  if (!ads.begin()) {
+    while (1) Serial.println("Could not find ADS1X15, check address!");
+  }
+
   for(int ii=0; ii <= RA_SIZE; ii++) {
     read_sensors();
   }
@@ -769,11 +820,6 @@ void loop() {
   while (!tft.getTouch(&tp)) {
     delay(30);
     read_sensors();
-    // 4 LINES UNDER ONLY FOR DEBUG UNTIL REAL MEASUREMENTS AVAILABLE
-    // heVal += 1;
-    // o2Val += 5;
-    // if (heVal > 100) heVal = 0.5;
-    // if (o2Val > 100) o2Val = 3.21;
     updateScreen();
   }
   updateTouchCoordinates();
