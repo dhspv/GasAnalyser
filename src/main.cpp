@@ -38,7 +38,7 @@
 #define SDAPIN  42
 #define SCLPIN  44
 
-#define PRESSURE_CALC_CONSTANT -0.00011464
+#define PRESSURE_CALC_CONSTANT 0.00011464
 
 // TFT
 LGFX tft;
@@ -67,9 +67,10 @@ float calibHeInHe   = 0;
 uint16_t altitude   = 0;
 
 // Sensor Curves
-float aO2;
-float bO2;
-float cO2;
+float a1O2;
+float b1O2;
+float a2O2;
+float b2O2;
 float bHe;
 float cHe;
 float xSens;
@@ -87,6 +88,18 @@ float battScale = 1.0;
 // Other
 uint32_t tmpTimer;
 Adafruit_ADS1115 ads;
+
+void dataStoredScreen(){
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextColor(TFT_GREEN);
+  tft.setTextDatum(CC_DATUM);
+  tft.setFont(&fonts::FreeSans18pt7b);
+  tft.drawString("New Data", w/2, h/2 - 50);
+  tft.drawString("Stored", w/2, h/2);
+  tft.drawString("Successfully!", w/2, h/2 + 50);
+
+  delay(3000);
+}
 
 float pressureRatio(){
   return exp(PRESSURE_CALC_CONSTANT * altitude);
@@ -152,11 +165,14 @@ float getBattPercent() {
   return battVal;
 }
 
-float calcO2(int32_t x){
-  return (aO2 * x * x + bO2 * x + cO2) * pressureRatio();
+float calcO2(float x){
+  if (x < calibO2InAir)
+    return (a1O2 * x + b1O2) * pressureRatio();
+  else
+    return (a2O2 * x + b2O2) * pressureRatio();
 }
 
-float calcHe(int32_t x){
+float calcHe(float x){
   return (x * bHe + cHe - o2Val * xSens) * pressureRatio(); 
 }
 
@@ -292,11 +308,15 @@ void setAltData() {
   do {
     tft.fillScreen(TFT_BLACK);
     tft.setTextDatum(CC_DATUM);
-    tft.setCursor(w/2 - 40, 50);
+    tft.setTextColor(TFT_GREEN);
+    tft.setCursor(w/2 - 40, 30);
     tft.printf("%3d", tmpAltitude);
-    tft.drawString("+", BUTTON_DBG_CX, BUTTON_DBG_CY);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawString("+", BUTTON_CHECKLIN_CX, BUTTON_CHECKLIN_CY);
+    tft.drawRect(BUTTON_CHECKLIN_CX - BUTTON_W/2, BUTTON_CHECKLIN_CY - BUTTON_H/2 - 5, BUTTON_W, BUTTON_H, TFT_WHITE);
+    tft.drawString("-", BUTTON_DBG_CX, BUTTON_DBG_CY);
     tft.drawRect(BUTTON_DBG_CX - BUTTON_W/2, BUTTON_DBG_CY - BUTTON_H/2 - 5, BUTTON_W, BUTTON_H, TFT_WHITE);
-    tft.drawString("-", BUTTON_NEXT_CX, BUTTON_NEXT_CY);
+    tft.drawString("Set", BUTTON_NEXT_CX, BUTTON_NEXT_CY);
     tft.drawRect(BUTTON_NEXT_CX - BUTTON_W/2, BUTTON_NEXT_CY - BUTTON_H/2 - 5, BUTTON_W, BUTTON_H, TFT_WHITE);
     tft.drawString("Exit", BUTTON_EXIT_CX, BUTTON_EXIT_CY);
     tft.drawRect(BUTTON_EXIT_CX - BUTTON_W/2, BUTTON_EXIT_CY - BUTTON_H/2 - 5, BUTTON_W, BUTTON_H, TFT_WHITE);
@@ -304,25 +324,28 @@ void setAltData() {
     while (!tft.getTouch(&tp)) delay(10);
     updateTouchCoordinates();
     Serial.printf("Touched! %f, %f\n", tx, ty);
-    if      (tx < BUTTON_DBG_CX + BUTTON_W/2 && 
+    if      (tx < BUTTON_CHECKLIN_CX + BUTTON_W/2 && 
+             tx > BUTTON_CHECKLIN_CX - BUTTON_W/2 && 
+             ty < BUTTON_CHECKLIN_CY + BUTTON_H/2 && 
+             ty > BUTTON_CHECKLIN_CY - BUTTON_H/2) {tmpAltitude += 100;}
+    else if (tx < BUTTON_DBG_CX + BUTTON_W/2 && 
              tx > BUTTON_DBG_CX - BUTTON_W/2 && 
              ty < BUTTON_DBG_CY + BUTTON_H/2 && 
-             ty > BUTTON_DBG_CY - BUTTON_H/2) {tmpAltitude += 100;}
+             ty > BUTTON_DBG_CY - BUTTON_H/2) {if (tmpAltitude > 0) tmpAltitude -= 100;}
     else if (tx < BUTTON_NEXT_CX + BUTTON_W/2 && 
              tx > BUTTON_NEXT_CX - BUTTON_W/2 && 
              ty < BUTTON_NEXT_CY + BUTTON_H/2 && 
-             ty > BUTTON_NEXT_CY - BUTTON_H/2) {if (tmpAltitude > 0) tmpAltitude -= 100;}
+             ty > BUTTON_NEXT_CY - BUTTON_H/2) {doneFlag = 1;}
     else if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
              tx > BUTTON_EXIT_CX - BUTTON_W/2 && 
              ty < BUTTON_EXIT_CY + BUTTON_H/2 && 
-             ty > BUTTON_EXIT_CY - BUTTON_H/2) {doneFlag = 1;}
+             ty > BUTTON_EXIT_CY - BUTTON_H/2) {return;}
   } while(!doneFlag);
   altitude = tmpAltitude;
   tft.fillScreen(TFT_BLACK);
   tft.setCursor(10, 30);
   writeAltData();
-  tft.print("New altitude stored!");
-  delay(1000);
+  dataStoredScreen();
 }
 
 void getTouchData() {
@@ -364,12 +387,10 @@ void storeTouch(float axNew, float ayNew, float bxNew, float byNew) {
 }
 
 void setO2Vars() {
-  float beta = calibO2InO2 * calibO2InO2 - calibO2InAir * calibO2InAir;
-  float gamma = calibO2InO2 * calibO2InO2 - calibO2InHe * calibO2InAir;
-  float epsilon = 1 / float(calibO2InO2 + calibO2InAir) - 1 / float(calibO2InO2 + calibO2InHe);
-  bO2 = (79.1 / beta - 100 / gamma) / epsilon;
-  aO2 = (79.1 - bO2 * (calibO2InO2 - calibO2InAir)) / beta;
-  cO2 = -1 * aO2 * calibO2InHe * calibO2InHe - bO2 * calibO2InHe;
+  a1O2 = 20.9/(calibO2InAir - calibO2InHe);
+  b1O2 = -1 * a1O2 * calibO2InHe;
+  a2O2 = 77.1/(calibO2InO2 - calibO2InAir);
+  b2O2 = 98.0 - a2O2 * calibO2InO2;
 }
 
 void setHeVars() {
@@ -420,6 +441,7 @@ void calibrateAir(){
       writeSensorData();
       setO2Vars();
       setHeVars();
+      dataStoredScreen();
       return;
     }
     else if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
@@ -470,6 +492,7 @@ void calibrateO2(){
       writeSensorData();
       setO2Vars();
       setHeVars();
+      dataStoredScreen();
       return;
     }
     else if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
@@ -520,6 +543,7 @@ void calibrateHe(){
       writeSensorData();
       setO2Vars();
       setHeVars();
+      dataStoredScreen();
       return;
     }
     else if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
@@ -574,13 +598,8 @@ void calibrateTouch() {
   float byNew = 20 - ayNew * yMinAvg;
 
   storeTouch(axNew, ayNew, bxNew, byNew);
-
-  tft.fillScreen(TFT_BLACK);
-  tft.setCursor(10, 30);
-  tft.print("New touch calibration stored!");
-
+  dataStoredScreen();
   getTouchData();
-  delay(2000);
 }
 
 void debugScreen() {
@@ -618,6 +637,40 @@ void debugScreen() {
   return;
 }
 
+void linearityCheck() {
+  tft.fillScreen(TFT_BLACK);
+  tft.setTextDatum(CC_DATUM);
+  tft.setFont(&fonts::FreeSans24pt7b);
+  tft.setTextColor(TFT_WHITE);
+
+  tft.drawString("Exit", BUTTON_EXIT_CX, BUTTON_EXIT_CY);
+  tft.drawRect(BUTTON_EXIT_CX - BUTTON_W/2, BUTTON_EXIT_CY - BUTTON_H/2 - 5, BUTTON_W, BUTTON_H, TFT_WHITE);
+
+  tft.setTextColor(TFT_CYAN);
+  tft.setFont(&fonts::FreeSans24pt7b);
+  tft.setTextDatum(TL_DATUM);
+  tft.drawString("Current O2", 5, 20);
+  tft.drawString("sensor", 5, 60);
+  tft.drawString("linearity:", 5, 100);
+
+  tft.setTextColor(TFT_GREEN);
+  tft.setCursor(30, 180);
+  tft.printf("%.1f %%", calibO2InO2 / (calibO2InAir/20.9*98.0) * 100.0);
+
+  delay(TOUCH_DELAY);
+
+  while (1) {
+    while (!tft.getTouch(&tp)) {
+      delay(10);
+    }
+    updateTouchCoordinates();
+    if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
+        tx > BUTTON_EXIT_CX - BUTTON_W/2 && 
+        ty < BUTTON_EXIT_CY + BUTTON_H/2 && 
+        ty > BUTTON_EXIT_CY - BUTTON_H/2) {return;}
+  }
+}
+
 void menuScreen2() {
   tft.fillScreen(TFT_BLACK);
   tft.setTextDatum(CC_DATUM);
@@ -653,6 +706,10 @@ void menuScreen2() {
              tx > BUTTON_DBG_CX - BUTTON_W/2 && 
              ty < BUTTON_DBG_CY + BUTTON_H/2 && 
              ty > BUTTON_DBG_CY - BUTTON_H/2) {debugScreen(); return;}
+    if      (tx < BUTTON_CHECKLIN_CX + BUTTON_W/2 && 
+             tx > BUTTON_CHECKLIN_CX - BUTTON_W/2 && 
+             ty < BUTTON_CHECKLIN_CY + BUTTON_H/2 && 
+             ty > BUTTON_CHECKLIN_CY - BUTTON_H/2) {linearityCheck(); return;}
     else if (tx < BUTTON_EXIT_CX + BUTTON_W/2 && 
              tx > BUTTON_EXIT_CX - BUTTON_W/2 && 
              ty < BUTTON_EXIT_CY + BUTTON_H/2 && 
@@ -690,11 +747,11 @@ void menuScreen1() {
     else if (tx < BUTTON_AIRCAL_CX + BUTTON_W/2 && 
              tx > BUTTON_AIRCAL_CX - BUTTON_W/2 && 
              ty < BUTTON_AIRCAL_CY + BUTTON_H/2 && 
-             ty > BUTTON_AIRCAL_CY - BUTTON_H/2) {calibrateAir();  mainScreen();return;}
+             ty > BUTTON_AIRCAL_CY - BUTTON_H/2) {calibrateAir();  mainScreen(); return;}
     else if (tx < BUTTON_O2CAL_CX + BUTTON_W/2 && 
              tx > BUTTON_O2CAL_CX - BUTTON_W/2 && 
              ty < BUTTON_O2CAL_CY + BUTTON_H/2 && 
-             ty > BUTTON_O2CAL_CY - BUTTON_H/2) {calibrateO2();  mainScreen();return;}
+             ty > BUTTON_O2CAL_CY - BUTTON_H/2) {calibrateO2();  mainScreen(); return;}
     else if (tx < BUTTON_HECAL_CX + BUTTON_W/2 && 
              tx > BUTTON_HECAL_CX - BUTTON_W/2 && 
              ty < BUTTON_HECAL_CY + BUTTON_H/2 && 
@@ -736,15 +793,23 @@ void resetScreen(){
 void startupScreen(){
   tft.fillScreen(TFT_RED);
   tft.setTextDatum(CC_DATUM);
-  tft.setTextColor(TFT_CYAN);
-  tft.setFont(&fonts::FreeSans24pt7b);
+  tft.setTextColor(TFT_BLACK);
+  tft.setFont(&fonts::FreeSansBold24pt7b);
   tft.drawString("Trimix", w/2, h/2-30);
   tft.drawString("Analyzer", w/2, h/2+30);
 
+  tft.fillRect(10, h-20, 20, 16, TFT_BLACK);
+  tft.fillRect(10 + 20, h-20 + 8 - 3, 5, 6, TFT_BLACK);
+
+  float battPercent = getBattPercent();
+  tft.setCursor(40, h-12);
+  tft.setFont(&fonts::FreeSans12pt7b);
+  tft.printf("%.0f%%", battPercent);
+
   tmpTimer = millis();
-  while (millis() - tmpTimer < 1000) {
+  while (millis() - tmpTimer < 2000) {
     delay(10);
-    if (tft.getTouch(&tp)) resetScreen();
+    if (tft.getTouch(&tp)) calibrateTouch();
   }
 }
 
@@ -761,7 +826,7 @@ void setup() {
 
   // TFT
   tft.init();
-  tft.setRotation(0);
+  tft.setRotation(2);
   tft.setColorDepth(8);
   h = tft.height();
   w = tft.width();
